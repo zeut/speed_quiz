@@ -1,0 +1,250 @@
+<html>
+	<head>
+		<script src="https://code.jquery.com/jquery-3.1.0.min.js" integrity="sha256-cCueBR6CsyA4/9szpPfrX3s49M9vUU5BgtiJj06wt/s=" crossorigin="anonymous"></script>
+		<link rel="stylesheet" type="text/css" href="//cdn.datatables.net/1.10.12/css/jquery.dataTables.css">
+		<script type="text/javascript" charset="utf8" src="//cdn.datatables.net/1.10.12/js/jquery.dataTables.js"></script>
+		<style>
+			.question {min-width:125px; padding:4px; margin: 3px; float:left;}
+			.answer  {}
+			.correct {background-color:#00A000;}
+			.success {font-size:24px;}
+		</style>
+	</head>
+	<body>
+		<div>Math Quiz!</div>
+		<div id="timer">
+			<input type="button" id="main_button" value="Start" />
+			<select id="num_questions">
+				<option value="5">5</option>
+				<option value="10">10</option>
+				<option value="20">20</option>
+				<option value="30">30</option>
+				<option value="40">40</option>
+				<option value="50">50</option>
+				<option value="60">60</option>
+				<option value="70">70</option>
+				<option value="80">80</option>
+				<option value="90">90</option>
+				<option value="100">100</option>
+			</select> 
+			question 
+			<select id="quiz_type">
+				<option value="l1addition">Simple Addition</option>
+				<option value="l1subtraction">Simple Subtraction</option>
+				<option value="l1multiplication">Simple Multiplication</option>
+				<option value="l1division">Simple Division</option>
+				<option value="tt01">Times Table: 1</option>
+				<option value="tt02">Times Table: 2</option>
+				<option value="tt03">Times Table: 3</option>
+				<option value="tt04">Times Table: 4</option>
+				<option value="tt05">Times Table: 5</option>
+				<option value="tt06">Times Table: 6</option>
+				<option value="tt07">Times Table: 7</option>
+				<option value="tt08">Times Table: 8</option>
+				<option value="tt09">Times Table: 9</option>
+				<option value="tt10">Times Table: 10</option>
+				<option value="tt11">Times Table: 11</option>
+				<option value="tt12">Times Tabled: 12</option>
+			</select>
+			quiz.
+			<span id="time_span" style="display:none;">
+				<input type="text" id="timer_time" value="0.0" size="8" /> seconds.
+			</span>
+		</div>
+		<div id="quiz_div"></div>
+		<br style="clear:both;" />
+		<div id="messages"></div>
+		<br style="clear:both;" />
+		<div id="high_scores"></div>
+		
+		<!-- End of HTML -->
+		<script>
+			var myTimer = null;
+			var start_time = null;
+			
+			jQuery(document).ready(function($) {
+				var	$qd = $('#quiz_div');
+				var quiz_results = [];
+				if(localStorage.test) {
+					quiz_results = JSON.parse(localStorage.test) || []; 
+				}
+				
+				// Turn spans green when the correct answer is given.
+				$qd.on('keyup', '.answer', function(e) {
+					var event = e;
+					var $this = $(this);
+					if( ($('#main_button').val() == "Stop" ) && (parseInt($this.data("ans")) === parseInt($this.val() ) ) ) { 
+						$p = $this.parent("span");
+						$p.addClass("correct"); 
+						var $n = $p.next().find("input");
+						$n.focus();
+					} 
+					else if ($('#main_button').val() == "Stop")  { $this.parent("span").removeClass("correct"); }
+					
+					var num_questions = $qd.find("span").filter(".question").length;
+					var num_correct = $qd.find("span").filter(".correct").length;
+					if( ($('#main_button').val() == "Stop") && (num_questions == num_correct) ) {
+						clearInterval(myTimer);
+						$('#main_button').val("Clear");
+						
+						var msg = "* You solved " + num_questions + " " + $('#quiz_type option:selected').text()  + " problems in " + $('#timer_time').val() + " seconds! (" + ( $('#timer_time').val() / $('#num_questions').val() ).toFixed(2) + "s avg)";
+						var $div = $("<div>", { "class":"success"} );
+						$div.append(msg);
+						$div.append("<br />Name: <input type=\"text\" id=\"quizee_name\" /><input type=\"submit\" id=\"submit_result\" />");
+						$("#messages").append($div);
+						var foo = $('#quiz_type').val();  
+						quiz_results.push( {message: msg} );
+						localStorage.setItem('test', JSON.stringify(quiz_results) ); 
+						// Setup click handler for button
+						$div.on('click', '#submit_result', submit_result_click);
+					}
+				});
+				
+// 				// Register the main_button on click handler
+				$('#timer').on('click', '#main_button', main_button_click );
+			});
+			
+			function submit_result_click() {
+				var $this = $(this);
+			    $.ajax( { url: "wapi.php?ajax=RecordResult&quiz_name=" + $('#quiz_type').val() + "&quizee_name=" + $('#quizee_name').val() + "&num_questions=" + $('#num_questions').val() + "&completion_time=" + $('#timer_time').val() , success: function(result) {
+    				var	$mdiv = $('#high_scores');
+					$mdiv.append("<br /><b>Top Results:</b><br />");
+ 					$mdiv.append( result );
+				} } );
+				
+			}
+			
+			function main_button_click() {
+				var $this = $(this);
+				
+				if($this.val() == "Start") {
+					// If this is a times table quiz, then set the num_questions = 10
+					if($('#quiz_type').val().substring(0,2) == "tt") { 
+						$('#num_questions').val("10")
+					}
+					// Maks sure the quiz_div is empty, then render a fresh quiz.
+					$('#quiz_div').val("");
+					render_quiz($('#num_questions').val() );
+					$('#time_span').css('display', 'inline');
+
+					myTimer = setInterval( function(t) {
+						// Deal with the timer.
+						curr_time = new Date().getTime();
+						$('#timer_time').val( ((curr_time - start_time)/1000).toPrecision(3) ); 
+					}, 100);
+					start_time = new Date().getTime();
+					$this.val("Stop");
+				}
+				else if($this.val() == "Stop") {
+					clearInterval(myTimer);
+					$('#time_span').css('display', 'none');
+					$this.val("Clear");
+				}					
+				else if($this.val() == "Clear") {
+					clearInterval(myTimer);
+					$('#quiz_div').empty();
+					$('#messages').empty();
+					$('#high_scores').empty();
+					$('#timer_time').val("0.00"); 
+					$this.val("Start");
+				}					
+			}
+			
+			function render_quiz(count) {
+				// Define some data
+				var	$qd = $('#quiz_div');
+				var num1_vals = shuffleArray( [ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 ]); 
+				var num2_vals = shuffleArray( [ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 ]); 
+				if($('#quiz_type').val() == "l1division") { num2_vals = shuffleArray( [ 1, 2, 3, 4, 5, 6, 7, 8, 9 ] ); } // So we don't divide by zero
+				if($('#quiz_type').val().substring(0,2) == "tt") { 
+					count = 10;
+					num2_vals = [ parseInt( $('#quiz_type').val().substring(2) ) ]; 
+				} 
+				var i = 0;
+				var spans = [];
+				
+				$.each(num1_vals, function(key1, val1) {
+					$.each(num2_vals, function(key2, val2) {
+						var val3 = val1 + val2; // Use val3 for addition and subtraction cases
+						var val4 = val1 * val2; // Use val4 for multiplication and division cases
+						var $span = $("<span>", { "id":"q" + i, "class":"question"} );
+						if($('#quiz_type').val() == "l1addition") {
+							$span.append(val1 + ' + ' + val2 + ' = ');
+							$span.append( $("<input>", { "class":"answer", "type":"text", "size":2, "id":"ans_" + i, "value":""} ).data("ans", val3) );
+						}
+						if($('#quiz_type').val() == "l1subtraction") {
+							$span.append(val3 + ' - ' + val2 + ' = ');
+							$span.append( $("<input>", { "class":"answer", "type":"text", "size":2, "id":"ans_" + i, "value":""} ).data("ans", val1) );
+						}
+						if($('#quiz_type').val() == "l1multiplication") {
+							$span.append(val1 + ' * ' + val2 + ' = ');
+							$span.append( $("<input>", { "class":"answer", "type":"text", "size":2, "id":"ans_" + i, "value":""} ).data("ans", val4) );
+						}
+						if($('#quiz_type').val() == "l1division") {
+							$span.append(val4 + ' / ' + val2 + ' = ');
+							$span.append( $("<input>", { "class":"answer", "type":"text", "size":2, "id":"ans_" + i, "value":""} ).data("ans", val1) );
+						}
+						if($('#quiz_type').val().substring(0,2) == "tt") {
+							$span.append(val1 + ' * ' + val2 + ' = ');
+							$span.append( $("<input>", { "class":"answer", "type":"text", "size":2, "id":"ans_" + i, "value":""} ).data("ans", val4) );
+						}
+						spans.push($span);
+						i++;
+					} );
+				} );
+				shuffleArray(spans);
+				i=0;
+				$.each(spans, function(key, $val) {
+					if(i++ >= count ) {return false;}
+					$qd.append($val);
+					if(i == 1) { $val.find("input").focus(); } // Set focus on the first question
+				} );
+				// Lastly get the top 10 list of prior results and display them
+				var	$mdiv = $('#high_scores');
+				$mdiv.append("<br /><b>Top Results:</b><br />");
+				// $mdiv.append(result);
+// 				var res = getResultsTableHTML();
+// 				$mdiv.append( res );
+//  				$('#' + $('#quiz_type').val() + "_" + $('#num_questions').val() + "_" + "results_table").DataTable( { "order": [ [ 0, "desc" ] ] } );
+// 				$mdiv.append("<table id=\"tt03_10_results_table\"><thead><tr><th>Rank</th><th>Who</th><th>Time</th><th>When</th></tr></thead><tbody><tr><td>1</td><td>Matt</td><td>00:00:08.8</td><td>Wed Nov 23 2016 01:30:21 GMT-0500 (EST)</td></tr><tr><td>2</td><td>Matt</td><td>00:00:11.6</td><td>Sun Nov 27 2016 10:40:20 GMT-0500 (EST)</td></tr><tr><td>3</td><td>Matt</td><td>00:00:13.4</td><td>Sun Nov 27 2016 10:10:14 GMT-0500 (EST)</td></tr><tr><td>4</td><td>Matt</td><td>00:00:16.5</td><td>Sun Nov 27 2016 10:09:17 GMT-0500 (EST)</td></tr></tbody></table>");
+// 				$('#tt03_10_results_table').DataTable();
+// 				$('#' + $('#quiz_type').val() + "_" + $('#num_questions').val() + "_" + "results_table").DataTable( { "order": [ [ 0, "desc" ] ] } );
+				$mdiv.append("<table id=\"tt03_10_results_table\"><thead><tr><th>Rank</th><th>Who</th><th>Time</th><th>When</th></tr></thead><tbody></tbody></table>");
+				$('#tt03_10_results_table').DataTable(
+				);
+			}
+			
+			function getResultsTableHTML() {
+				var $tbl = $("<table>", {"id": $('#quiz_type').val() + "_" + $('#num_questions').val() + "_" + "results_table"} );
+			    $.ajax( { url: "wapi.php?ajax=GetTopTenTimes&quiz_name=" + $('#quiz_type').val() + "&num_questions=" + $('#num_questions').val(), success: function(result) {					
+					$tbl.append("<thead><tr><th>Rank</th><th>Who</th><th>Time</th><th>When</th></tr></thead>");
+					var $tbdy = $('<tbody>');
+					$.each($.parseJSON(result), function(key, row) {
+							var $row = $("<tr>");
+							var d = new Date(row.quiz_taken_ts);
+							$row.append($("<td>").append(row.rank) );
+							$row.append($("<td>").append(row.quizee_name) );
+							$row.append($("<td>").append(row.completion_time) );
+							$row.append($("<td>").append( "" + d.toString() ) );
+							$tbdy.append($row);
+					} );
+					$tbl.append($tbdy);
+				} } );
+				return $tbl;
+			}
+			/**
+			* Randomize array element order in-place.
+			* Using Durstenfeld shuffle algorithm.
+			*/
+			function shuffleArray(array) {
+				for (var i = array.length - 1; i > 0; i--) {
+					var j = Math.floor(Math.random() * (i + 1));
+					var temp = array[i];
+					array[i] = array[j];
+					array[j] = temp;
+				}
+				return array;
+			}		
+		</script>
+	</body>
+</html>
